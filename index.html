@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AVD Support Assistant</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .chat-container {
+            width: 480px;
+            height: 650px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: #0078d4;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .chat-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .chat-header p {
+            font-size: 12px;
+            opacity: 0.85;
+            margin-top: 4px;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+        .message.bot {
+            background: #f0f2f5;
+            color: #1a1a1a;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .message.user {
+            background: #0078d4;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .message.typing {
+            background: #f0f2f5;
+            color: #888;
+            align-self: flex-start;
+            font-style: italic;
+        }
+        .chat-input-area {
+            padding: 16px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            font-size: 14px;
+            outline: none;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .chat-input-area input:focus {
+            border-color: #0078d4;
+        }
+        .chat-input-area button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            padding: 12px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: 'Segoe UI', sans-serif;
+            font-weight: 500;
+        }
+        .chat-input-area button:hover {
+            background: #006cbd;
+        }
+        .chat-input-area button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status-bar {
+            text-align: center;
+            font-size: 11px;
+            color: #888;
+            padding: 6px;
+            background: #fafafa;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🖥️ AVD Support Assistant</h1>
+            <p>Powered by Azure OpenAI — Ask me anything about AVD</p>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">👋 Hi! I'm your AVD Support Assistant. How can I help you today?
+
+You can ask me things like:
+- "I can't connect to AVD"
+- "My session is frozen"
+- "Getting an error code"
+- "AVD is running slow"</div>
+        </div>
+        <div class="chat-input-area">
+            <input 
+                type="text" 
+                id="userInput" 
+                placeholder="Describe your AVD issue..." 
+                onkeypress="handleKeyPress(event)"
+            />
+            <button id="sendBtn" onclick="sendMessage()">Send</button>
+        </div>
+        <div class="status-bar" id="statusBar">Ready to help</div>
+    </div>
+
+    <script>
+        const LOGIC_APP_URL = 'https://prod-12.eastus.logic.azure.com:443/workflows/d53dd75632934c5584e3be88274f0f7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=3wJ4YpXpZ8EQY0WzHLiRLFiLSdZY0AorGZGk2C_s8-w';
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') sendMessage();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            addMessage(message, 'user');
+            input.value = '';
+            sendBtn.disabled = true;
+
+            const typingDiv = addMessage('AVD Assistant is thinking...', 'typing');
+            document.getElementById('statusBar').textContent = 'Connecting to AVD Support AI...';
+
+            try {
+                const response = await fetch(LOGIC_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                typingDiv.remove();
+
+                if (response.ok) {
+                    const text = await response.text();
+                    addMessage(text, 'bot');
+                    document.getElementById('statusBar').textContent = 'Ready to help';
+                } else {
+                    addMessage('Sorry, I encountered an error. Please try again or contact IT support.', 'bot');
+                    document.getElementById('statusBar').textContent = 'Error — please try again';
+                }
+            } catch (error) {
+                typingDiv.remove();
+                addMessage('Unable to connect to support service. Please check your connection.', 'bot');
+                document.getElementById('statusBar').textContent = 'Connection error';
+            }
+
+            sendBtn.disabled = false;
+            input.focus();
+        }
+
+        function addMessage(text, type) {
+            const messages = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+            return div;
+        }
+    </script>
+</body>
+</html>
