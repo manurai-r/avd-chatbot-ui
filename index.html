@@ -16,7 +16,7 @@
         }
         .chat-container {
             width: 480px;
-            height: 650px;
+            height: 700px;
             background: white;
             border-radius: 16px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.12);
@@ -30,14 +30,36 @@
             padding: 20px;
             text-align: center;
         }
-        .chat-header h1 {
-            font-size: 18px;
-            font-weight: 600;
+        .chat-header h1 { font-size: 18px; font-weight: 600; }
+        .chat-header p { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+        .username-bar {
+            background: #e8f0fe;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #ddd;
         }
-        .chat-header p {
-            font-size: 12px;
-            opacity: 0.85;
-            margin-top: 4px;
+        .username-bar label {
+            font-size: 13px;
+            color: #444;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .username-bar input {
+            flex: 1;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-radius: 12px;
+            font-size: 13px;
+            outline: none;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .username-bar input:focus { border-color: #0078d4; }
+        .username-bar span {
+            font-size: 11px;
+            color: #888;
+            white-space: nowrap;
         }
         .chat-messages {
             flex: 1;
@@ -88,9 +110,7 @@
             outline: none;
             font-family: 'Segoe UI', sans-serif;
         }
-        .chat-input-area input:focus {
-            border-color: #0078d4;
-        }
+        .chat-input-area input:focus { border-color: #0078d4; }
         .chat-input-area button {
             background: #0078d4;
             color: white;
@@ -102,13 +122,8 @@
             font-family: 'Segoe UI', sans-serif;
             font-weight: 500;
         }
-        .chat-input-area button:hover {
-            background: #006cbd;
-        }
-        .chat-input-area button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
+        .chat-input-area button:hover { background: #006cbd; }
+        .chat-input-area button:disabled { background: #ccc; cursor: not-allowed; }
         .status-bar {
             text-align: center;
             font-size: 11px;
@@ -125,11 +140,22 @@
             <h1>🖥️ AVD Support Assistant</h1>
             <p>Powered by Azure OpenAI — Ask me anything about AVD</p>
         </div>
+        <div class="username-bar">
+            <label>👤 Your email:</label>
+            <input 
+                type="text" 
+                id="usernameInput" 
+                placeholder="user@domain.com"
+            />
+            <span>for log lookup</span>
+        </div>
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">👋 Hi! I'm your AVD Support Assistant. How can I help you today?
 
+Please enter your email above so I can check your session logs.
+
 You can ask me things like:
-- "I can't connect to AVD"
+- "Why did my session disconnect?"
 - "My session is frozen"
 - "Getting an error code"
 - "AVD is running slow"</div>
@@ -157,21 +183,27 @@ You can ask me things like:
             const input = document.getElementById('userInput');
             const sendBtn = document.getElementById('sendBtn');
             const message = input.value.trim();
-            
+            const username = document.getElementById('usernameInput').value.trim();
+
             if (!message) return;
+
+            if (!username) {
+                alert('Please enter your email address above so I can look up your logs!');
+                return;
+            }
 
             addMessage(message, 'user');
             input.value = '';
             sendBtn.disabled = true;
 
             const typingDiv = addMessage('AVD Assistant is thinking...', 'typing');
-            document.getElementById('statusBar').textContent = 'Connecting to AVD Support AI...';
+            document.getElementById('statusBar').textContent = 'Fetching your logs and analysing...';
 
             try {
                 const response = await fetch(LOGIC_APP_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify({ message: message, username: username })
                 });
 
                 typingDiv.remove();
