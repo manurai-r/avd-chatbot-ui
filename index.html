@@ -10,15 +10,40 @@
             font-family: 'Segoe UI', sans-serif;
             background: #f0f2f5;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+        }
+        .auth-bar {
+            width: 480px;
+            background: #0078d4;
+            color: white;
+            padding: 8px 16px;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .auth-bar a {
+            color: white;
+            text-decoration: underline;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .auth-bar .role-badge {
+            background: rgba(255,255,255,0.25);
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 11px;
+            margin-left: 8px;
         }
         .chat-container {
             width: 480px;
             height: 700px;
             background: white;
-            border-radius: 16px;
+            border-radius: 0 0 16px 16px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.12);
             display: flex;
             flex-direction: column;
@@ -32,35 +57,6 @@
         }
         .chat-header h1 { font-size: 18px; font-weight: 600; }
         .chat-header p { font-size: 12px; opacity: 0.85; margin-top: 4px; }
-        .username-bar {
-            background: #e8f0fe;
-            padding: 10px 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #ddd;
-        }
-        .username-bar label {
-            font-size: 13px;
-            color: #444;
-            white-space: nowrap;
-            font-weight: 500;
-        }
-        .username-bar input {
-            flex: 1;
-            padding: 6px 12px;
-            border: 1px solid #ccc;
-            border-radius: 12px;
-            font-size: 13px;
-            outline: none;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        .username-bar input:focus { border-color: #0078d4; }
-        .username-bar span {
-            font-size: 11px;
-            color: #888;
-            white-space: nowrap;
-        }
         .chat-messages {
             flex: 1;
             padding: 20px;
@@ -135,24 +131,20 @@
     </style>
 </head>
 <body>
+
+    <!-- Auth bar: shown above chat container -->
+    <div class="auth-bar" id="authBar">
+        <span id="userInfo">Checking login...</span>
+        <a href="/.auth/logout">Logout</a>
+    </div>
+
     <div class="chat-container">
         <div class="chat-header">
             <h1>🖥️ AVD Support Assistant</h1>
             <p>Powered by Azure OpenAI — Ask me anything about AVD</p>
         </div>
-        <div class="username-bar">
-            <label>👤 Your email:</label>
-            <input 
-                type="text" 
-                id="usernameInput" 
-                placeholder="user@domain.com"
-            />
-            <span>for log lookup</span>
-        </div>
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">👋 Hi! I'm your AVD Support Assistant. How can I help you today?
-
-Please enter your email above so I can check your session logs.
 
 You can ask me things like:
 - "Why did my session disconnect?"
@@ -169,12 +161,63 @@ You can ask me things like:
             />
             <button id="sendBtn" onclick="sendMessage()">Send</button>
         </div>
-        <div class="status-bar" id="statusBar">Ready to help</div>
+        <div class="status-bar" id="statusBar">Checking authentication...</div>
     </div>
 
     <script>
         const LOGIC_APP_URL = 'https://prod-12.eastus.logic.azure.com:443/workflows/d53dd75632934c5584e3be88274f0f7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=3wJ4YpXpZ8EQY0WzHLiRLFiLSdZY0AorGZGk2C_s8-w';
 
+        let currentUser = null;
+        let isAdmin = false;
+
+        // --- Auth init ---
+        async function initAuth() {
+            try {
+                const res = await fetch('/.auth/me');
+
+                // If response is not JSON (e.g. HTML redirect), go to login
+                const contentType = res.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    window.location.href = '/.auth/login/aad?post_login_redirect_uri=/';
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (data.clientPrincipal) {
+                    currentUser = data.clientPrincipal.userDetails; // email
+                    const roles = data.clientPrincipal.userRoles || [];
+                    isAdmin = roles.includes('admin');
+
+                    const badge = isAdmin ? '<span class="role-badge">Admin</span>' : '';
+                    document.getElementById('userInfo').innerHTML = `👤 ${currentUser}${badge}`;
+                    document.getElementById('statusBar').textContent = 'Ready to help';
+                    document.getElementById('sendBtn').disabled = false;
+
+                    if (isAdmin) {
+                        document.getElementById('chatMessages').innerHTML = `
+                            <div class="message bot">👋 Hi Admin! You have access to all users' logs.
+Ask me things like:
+- "Show all connection errors in the last hour"
+- "Which users had session failures?"
+- "Summarise recent AVD errors"</div>`;
+                    }
+                } else {
+                    // Logged in but no principal — redirect to AAD login
+                    window.location.href = '/.auth/login/aad?post_login_redirect_uri=/';
+                }
+            } catch (e) {
+                console.error('Auth check failed', e);
+                // Any error — redirect to login as fallback
+                window.location.href = '/.auth/login/aad?post_login_redirect_uri=/';
+            }
+        }
+
+        // Disable send button until auth completes
+        document.getElementById('sendBtn').disabled = true;
+        initAuth();
+
+        // --- Chat ---
         function handleKeyPress(event) {
             if (event.key === 'Enter') sendMessage();
         }
@@ -183,12 +226,10 @@ You can ask me things like:
             const input = document.getElementById('userInput');
             const sendBtn = document.getElementById('sendBtn');
             const message = input.value.trim();
-            const username = document.getElementById('usernameInput').value.trim();
 
             if (!message) return;
-
-            if (!username) {
-                alert('Please enter your email address above so I can look up your logs!');
+            if (!currentUser) {
+                alert('Authentication not complete. Please refresh the page.');
                 return;
             }
 
@@ -197,13 +238,17 @@ You can ask me things like:
             sendBtn.disabled = true;
 
             const typingDiv = addMessage('AVD Assistant is thinking...', 'typing');
-            document.getElementById('statusBar').textContent = 'Fetching your logs and analysing...';
+            document.getElementById('statusBar').textContent = 'Fetching logs and analysing...';
 
             try {
                 const response = await fetch(LOGIC_APP_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message, username: username })
+                    body: JSON.stringify({
+                        message: message,
+                        username: isAdmin ? null : currentUser,
+                        isAdmin: isAdmin
+                    })
                 });
 
                 typingDiv.remove();
