@@ -66,7 +66,7 @@
             gap: 12px;
         }
         .message {
-            max-width: 80%;
+            max-width: 90%;
             padding: 12px 16px;
             border-radius: 12px;
             font-size: 14px;
@@ -91,6 +91,53 @@
             align-self: flex-start;
             font-style: italic;
         }
+        .message.table-msg {
+            max-width: 100%;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 12px;
+            align-self: flex-start;
+        }
+        .table-msg .export-btn {
+            background: #107c10;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            font-family: 'Segoe UI', sans-serif;
+            font-weight: 500;
+        }
+        .table-msg .export-btn:hover { background: #0e6b0e; }
+        .table-msg .table-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #0078d4;
+            margin-bottom: 6px;
+        }
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .log-table th {
+            background: #0078d4;
+            color: white;
+            padding: 6px 8px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .log-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #e8e8e8;
+            color: #333;
+            word-break: break-word;
+        }
+        .log-table tr:nth-child(even) td { background: #f4f7fb; }
+        .log-table tr:hover td { background: #e8f0fe; }
         .chat-input-area {
             padding: 16px;
             border-top: 1px solid #eee;
@@ -128,11 +175,50 @@
             background: #fafafa;
             border-top: 1px solid #eee;
         }
+        .login-overlay {
+            position: fixed;
+            inset: 0;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+        .login-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+            padding: 48px 40px;
+            text-align: center;
+            width: 360px;
+        }
+        .login-card h1 { font-size: 22px; color: #1a1a1a; margin-bottom: 8px; }
+        .login-card p { font-size: 14px; color: #666; margin-bottom: 32px; }
+        .login-card .app-icon { font-size: 48px; margin-bottom: 16px; }
+        .login-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            font-family: 'Segoe UI', sans-serif;
+            text-decoration: none;
+        }
+        .login-btn:hover { background: #006cbd; }
+        .login-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+        .login-footer { margin-top: 24px; font-size: 11px; color: #aaa; }
     </style>
 </head>
 <body>
 
-    <!-- Auth bar: shown above chat container -->
     <div class="auth-bar" id="authBar">
         <span id="userInfo">Checking login...</span>
         <a href="/.auth/logout">Logout</a>
@@ -153,10 +239,10 @@ You can ask me things like:
 - "AVD is running slow"</div>
         </div>
         <div class="chat-input-area">
-            <input 
-                type="text" 
-                id="userInput" 
-                placeholder="Describe your AVD issue..." 
+            <input
+                type="text"
+                id="userInput"
+                placeholder="Describe your AVD issue..."
                 onkeypress="handleKeyPress(event)"
             />
             <button id="sendBtn" onclick="sendMessage()">Send</button>
@@ -170,22 +256,49 @@ You can ask me things like:
         let currentUser = null;
         let isAdmin = false;
 
+        // Keywords that trigger table + CSV export view (admin only)
+        const EXPORT_KEYWORDS = ['show', 'export', 'list'];
+
+        function isExportQuery(message) {
+            const lower = message.toLowerCase();
+            return EXPORT_KEYWORDS.some(k => lower.includes(k));
+        }
+
+        // --- Login page ---
+        function showLoginPage() {
+            document.getElementById('authBar').style.display = 'none';
+            document.querySelector('.chat-container').style.display = 'none';
+            const overlay = document.createElement('div');
+            overlay.className = 'login-overlay';
+            overlay.innerHTML = `
+                <div class="login-card">
+                    <div class="app-icon">🖥️</div>
+                    <h1>AVD Support Assistant</h1>
+                    <p>Sign in with your organisation account to access your session logs and get support.</p>
+                    <a class="login-btn" href="/.auth/login/aad?post_login_redirect_uri=/">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23 23" fill="white">
+                            <path d="M1 1h10v10H1zm11 0h10v10H12zM1 12h10v10H1zm11 0h10v10H12z"/>
+                        </svg>
+                        Sign in with Microsoft
+                    </a>
+                    <div class="login-footer">Powered by Azure Active Directory</div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
         // --- Auth init ---
         async function initAuth() {
             try {
                 const res = await fetch('/.auth/me');
-
-                // If response is not JSON (e.g. HTML redirect), go to login
                 const contentType = res.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
-                    window.location.href = '/.auth/login/aad?post_login_redirect_uri=/';
+                    showLoginPage();
                     return;
                 }
-
                 const data = await res.json();
-
-                if (data.clientPrincipal) {
-                    currentUser = data.clientPrincipal.userDetails; // email
+                if (data.clientPrincipal && data.clientPrincipal.userDetails) {
+                    currentUser = data.clientPrincipal.userDetails;
                     const roles = data.clientPrincipal.userRoles || [];
                     isAdmin = roles.includes('admin');
 
@@ -197,23 +310,22 @@ You can ask me things like:
                     if (isAdmin) {
                         document.getElementById('chatMessages').innerHTML = `
                             <div class="message bot">👋 Hi Admin! You have access to all users' logs.
+
 Ask me things like:
-- "Show all connection errors in the last hour"
-- "Which users had session failures?"
-- "Summarise recent AVD errors"</div>`;
+- "Show all recent connection errors"  → table + CSV export
+- "List users with session failures"   → table + CSV export
+- "Export all errors from last hour"   → table + CSV export
+- "Summarise recent AVD errors"        → text summary only</div>`;
                     }
                 } else {
-                    // Logged in but no principal — redirect to AAD login
-                    window.location.href = '/.auth/login/aad?post_login_redirect_uri=/';
+                    showLoginPage();
                 }
             } catch (e) {
                 console.error('Auth check failed', e);
-                // Any error — redirect to login as fallback
-                window.location.href = '/.auth/login/aad?post_login_redirect_uri=/';
+                showLoginPage();
             }
         }
 
-        // Disable send button until auth completes
         document.getElementById('sendBtn').disabled = true;
         initAuth();
 
@@ -240,6 +352,8 @@ Ask me things like:
             const typingDiv = addMessage('AVD Assistant is thinking...', 'typing');
             document.getElementById('statusBar').textContent = 'Fetching logs and analysing...';
 
+            const exportMode = isAdmin && isExportQuery(message);
+
             try {
                 const response = await fetch(LOGIC_APP_URL, {
                     method: 'POST',
@@ -247,7 +361,8 @@ Ask me things like:
                     body: JSON.stringify({
                         message: message,
                         username: isAdmin ? null : currentUser,
-                        isAdmin: isAdmin
+                        isAdmin: isAdmin,
+                        exportMode: exportMode
                     })
                 });
 
@@ -255,7 +370,22 @@ Ask me things like:
 
                 if (response.ok) {
                     const text = await response.text();
-                    addMessage(text, 'bot');
+
+                    // Try structured JSON response (export mode returns {summary, rows})
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (parsed.summary) addMessage(parsed.summary, 'bot');
+                        if (parsed.rows && parsed.rows.length > 0) {
+                            renderTable(parsed.rows);
+                        } else if (parsed.summary === undefined) {
+                            // Fallback if JSON but unexpected shape
+                            addMessage(text, 'bot');
+                        }
+                    } catch (e) {
+                        // Plain text — normal mode
+                        addMessage(text, 'bot');
+                    }
+
                     document.getElementById('statusBar').textContent = 'Ready to help';
                 } else {
                     addMessage('Sorry, I encountered an error. Please try again or contact IT support.', 'bot');
@@ -269,6 +399,77 @@ Ask me things like:
 
             sendBtn.disabled = false;
             input.focus();
+        }
+
+        // --- Render table with Export CSV button ---
+        function renderTable(rows) {
+            const messages = document.getElementById('chatMessages');
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message table-msg';
+
+            const label = document.createElement('div');
+            label.className = 'table-label';
+            label.textContent = `📋 ${rows.length} record${rows.length !== 1 ? 's' : ''} found`;
+            wrapper.appendChild(label);
+
+            const exportBtn = document.createElement('button');
+            exportBtn.className = 'export-btn';
+            exportBtn.textContent = '⬇ Export to CSV';
+            exportBtn.onclick = () => exportCSV(rows);
+            wrapper.appendChild(exportBtn);
+
+            const table = document.createElement('table');
+            table.className = 'log-table';
+
+            // Header from first row keys
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            Object.keys(rows[0]).forEach(key => {
+                const th = document.createElement('th');
+                th.textContent = key;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // Data rows
+            const tbody = document.createElement('tbody');
+            rows.forEach(row => {
+                const tr = document.createElement('tr');
+                Object.values(row).forEach(val => {
+                    const td = document.createElement('td');
+                    td.textContent = val ?? '';
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            wrapper.appendChild(table);
+
+            messages.appendChild(wrapper);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // --- Export CSV ---
+        function exportCSV(rows) {
+            if (!rows || rows.length === 0) return;
+            const headers = Object.keys(rows[0]);
+            const csvLines = [
+                headers.join(','),
+                ...rows.map(row =>
+                    headers.map(h => {
+                        const val = String(row[h] ?? '').replace(/"/g, '""');
+                        return `"${val}"`;
+                    }).join(',')
+                )
+            ];
+            const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `avd-logs-${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         function addMessage(text, type) {
